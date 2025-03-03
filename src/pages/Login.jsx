@@ -58,82 +58,141 @@ const Login = ({ open, onClose, onLogin, initialMode = 'login' }) => {
         }
     };
 
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        setError('');
+    const [isLoading, setIsLoading] = useState(false);
 
-        try {
-            if (isLogin) {
-                // Login Flow - Using GET method
-                const response = await fetch(`https://boldservebackend-production.up.railway.app/api/users?email=${formData.email}`, {
-                    method: 'GET',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Accept': 'application/json'
-                    }
-                });
-
-                if (!response.ok) {
-                    throw new Error('Failed to fetch user data');
-                }
-
-                const responseData = await response.json();
-                const users = responseData.success ? responseData.data : [];
-                const user = users.find(u => u.email === formData.email);
-
-                if (user) {
-                    const token = btoa(user.email + ':' + new Date().getTime());
-                    localStorage.setItem('token', token);
-                    localStorage.setItem('userData', JSON.stringify(user));
-                    onLogin(user);
-                    onClose();
-
-                    if (productToAdd) {
-                        await handleAddToCart(productToAdd);
-                        navigate('/products');
-                    } else {
-                        navigate(location.state?.from || '/');
-                    }
-                } else {
-                    throw new Error('Invalid email or password');
-                }
-            } else {
-                // Registration Flow - Using POST method
-                const response = await fetch('https://boldservebackend-production.up.railway.app/api/users/register', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Accept': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        fullName: formData.fullName,
-                        email: formData.email,
-                        password: formData.password,
-                        mobile: formData.mobile
-                    })
-                });
-
-                const data = await response.json();
-
-                if (response.ok && data.user) {
-                    setIsLogin(true);
-                    setFormData({
-                        fullName: '',
-                        email: '',
-                        password: '',
-                        confirmPassword: '',
-                        mobile: ''
+        const handleSubmit = async (e) => {
+            e.preventDefault();
+            setError('');
+            setIsLoading(true);
+    
+            try {
+                if (isLogin) {
+                    // Login Flow - Using GET method with error handling
+                    const response = await fetch(`https://boldservebackend-production.up.railway.app/api/users?email=${formData.email}`, {
+                        method: 'GET',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json'
+                        }
+                    }).catch(error => {
+                        throw new Error('Network error - Please check your connection');
                     });
-                    setError('Registration successful! Please login.');
+    
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(errorData.message || 'Server error - Please try again later');
+                    }
+    
+                    const responseData = await response.json();
+                    if (!responseData || !responseData.success) {
+                        throw new Error('Invalid response from server');
+                    }
+    
+                    const users = responseData.data || [];
+                    const user = users.find(u => u.email === formData.email && u.password === formData.password);
+    
+                    if (user) {
+                        const token = btoa(user.email + ':' + new Date().getTime());
+                        localStorage.setItem('token', token);
+                        localStorage.setItem('userData', JSON.stringify(user));
+                        onLogin(user);
+                        onClose();
+    
+                        if (productToAdd) {
+                            await handleAddToCart(productToAdd);
+                            navigate('/products');
+                        } else {
+                            navigate(location.state?.from || '/');
+                        }
+                    } else {
+                        throw new Error('Invalid email or password');
+                    }
                 } else {
-                    throw new Error(data.message || 'Registration failed');
+                    // Registration Flow - Using POST method with error handling
+                    const response = await fetch('https://boldservebackend-production.up.railway.app/api/users/register', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Accept': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            fullName: formData.fullName,
+                            email: formData.email,
+                            password: formData.password,
+                            mobile: formData.mobile
+                        })
+                    }).catch(error => {
+                        throw new Error('Network error - Please check your connection');
+                    });
+    
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(errorData.message || 'Registration failed - Please try again');
+                    }
+    
+                    const data = await response.json();
+                    if (!data || !data.user) {
+                        throw new Error('Invalid response from server');
+                    }
+    
+                    if (response.ok && data.user) {
+                        setIsLogin(true);
+                        setFormData({
+                            fullName: '',
+                            email: '',
+                            password: '',
+                            confirmPassword: '',
+                            mobile: ''
+                        });
+                        setError('Registration successful! Please login.');
+                    } else {
+                        throw new Error(data.message || 'Registration failed');
+                    }
                 }
+            } catch (err) {
+                console.error('Error:', err);
+                setError(err.message || 'An unexpected error occurred');
+            } finally {
+                setIsLoading(false);
             }
-        } catch (err) {
-            console.error('Error:', err);
-            setError(err.message || 'An error occurred');
-        }
-    };
+        };
+    
+        // Update the button to show loading state
+        <Button
+            type="submit"
+            fullWidth
+            variant="contained"
+            disabled={isLoading}
+            sx={{
+                mt: 2,
+                mb: 3,
+                bgcolor: '#7B68EE',
+                py: 1.5,
+                position: 'relative',
+                overflow: 'hidden',
+                transition: 'all 0.3s ease-in-out',
+                '&:hover': {
+                    bgcolor: '#6A5ACD',
+                    transform: 'scale(1.02)',
+                    '&::after': {
+                        left: '120%',
+                    },
+                },
+                '&::after': {
+                    content: '""',
+                    position: 'absolute',
+                    top: '-50%',
+                    left: '-60%',
+                    width: '20px',
+                    height: '200%',
+                    background: 'rgba(255, 255, 255, 0.3)',
+                    transform: 'rotate(35deg)',
+                    transition: 'all 0.6s ease-in-out',
+                },
+            }}
+        >
+            {isLoading ? 'Please wait...' : (isLogin ? 'Login' : 'Register')}
+        </Button>
 
     // Fix the handleAddToCart function - loginResponse was undefined
     const handleAddToCart = async (product) => {
