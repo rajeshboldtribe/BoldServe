@@ -99,16 +99,6 @@ const Login = ({ open, onClose, onLogin, initialMode = 'login' }) => {
                 }
             } else {
                 // Registration Flow - Using POST method
-                if (formData.password !== formData.confirmPassword) {
-                    setError('Passwords do not match');
-                    return;
-                }
-
-                if (phoneError) {
-                    setError('Please enter a valid phone number');
-                    return;
-                }
-
                 const response = await fetch('https://boldservebackend-production.up.railway.app/api/users/register', {
                     method: 'POST',
                     headers: {
