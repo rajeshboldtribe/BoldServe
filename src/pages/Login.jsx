@@ -64,78 +64,64 @@ const Login = ({ open, onClose, onLogin, initialMode = 'login' }) => {
             e.preventDefault();
             setError('');
             setIsLoading(true);
-    
+
             try {
                 if (isLogin) {
-                    // Login Flow - Using GET method with error handling
+                    // Login Flow - Using GET method
                     const response = await fetch(`https://boldservebackend-production.up.railway.app/api/users?email=${formData.email}`, {
                         method: 'GET',
                         headers: {
-                            'Content-Type': 'application/json',
-                            'Accept': 'application/json'
+                            'Content-Type': 'application/json'
                         }
-                    }).catch(error => {
-                        throw new Error('Network error - Please check your connection');
                     });
     
-                    if (!response.ok) {
-                        const errorData = await response.json();
-                        throw new Error(errorData.message || 'Server error - Please try again later');
-                    }
+                    const data = await response.json();
+                    
+                    if (response.ok && data.success) {
+                        const users = data.data || [];
+                        const user = users.find(u => u.email === formData.email && u.password === formData.password);
     
-                    const responseData = await response.json();
-                    if (!responseData || !responseData.success) {
-                        throw new Error('Invalid response from server');
-                    }
+                        if (user) {
+                            const token = btoa(user.email + ':' + new Date().getTime());
+                            localStorage.setItem('token', token);
+                            localStorage.setItem('userData', JSON.stringify(user));
+                            onLogin(user);
+                            onClose();
     
-                    const users = responseData.data || [];
-                    const user = users.find(u => u.email === formData.email && u.password === formData.password);
-    
-                    if (user) {
-                        const token = btoa(user.email + ':' + new Date().getTime());
-                        localStorage.setItem('token', token);
-                        localStorage.setItem('userData', JSON.stringify(user));
-                        onLogin(user);
-                        onClose();
-    
-                        if (productToAdd) {
-                            await handleAddToCart(productToAdd);
-                            navigate('/products');
+                            if (productToAdd) {
+                                await handleAddToCart(productToAdd);
+                                navigate('/products');
+                            } else {
+                                navigate(location.state?.from || '/');
+                            }
                         } else {
-                            navigate(location.state?.from || '/');
+                            throw new Error('Invalid email or password');
                         }
                     } else {
-                        throw new Error('Invalid email or password');
+                        throw new Error(data.message || 'Login failed');
                     }
                 } else {
-                    // Registration Flow - Using POST method with error handling
+                    // Registration Flow remains POST
+                    if (formData.password !== formData.confirmPassword) {
+                        throw new Error('Passwords do not match');
+                    }
+    
                     const response = await fetch('https://boldservebackend-production.up.railway.app/api/users/register', {
                         method: 'POST',
                         headers: {
-                            'Content-Type': 'application/json',
-                            'Accept': 'application/json'
+                            'Content-Type': 'application/json'
                         },
                         body: JSON.stringify({
-                            fullName: formData.fullName,
+                            name: formData.fullName,
                             email: formData.email,
                             password: formData.password,
-                            mobile: formData.mobile
+                            phone: formData.mobile
                         })
-                    }).catch(error => {
-                        throw new Error('Network error - Please check your connection');
                     });
     
-                    if (!response.ok) {
-                        const errorData = await response.json();
-                        throw new Error(errorData.message || 'Registration failed - Please try again');
-                    }
-    
                     const data = await response.json();
-                    if (!data || !data.user) {
-                        throw new Error('Invalid response from server');
-                    }
     
-                    if (response.ok && data.user) {
+                    if (response.ok && data.success) {
                         setIsLogin(true);
                         setFormData({
                             fullName: '',
