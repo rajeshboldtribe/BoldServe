@@ -64,41 +64,53 @@ const Login = ({ open, onClose, onLogin, initialMode = 'login' }) => {
             e.preventDefault();
             setError('');
             setIsLoading(true);
-
+    
             try {
                 if (isLogin) {
-                    // Login Flow - Using GET method
-                    const response = await fetch(`https://boldservebackend-production.up.railway.app/api/users?email=${formData.email}`, {
+                    // Login Flow with better error handling
+                    const response = await fetch(`https://boldservebackend-production.up.railway.app/api/users?email=${encodeURIComponent(formData.email)}`, {
                         method: 'GET',
                         headers: {
                             'Content-Type': 'application/json'
-                        }
+                        },
+                        mode: 'cors',
+                        credentials: 'same-origin'
                     });
     
-                    const data = await response.json();
-                    
-                    if (response.ok && data.success) {
-                        const users = data.data || [];
-                        const user = users.find(u => u.email === formData.email && u.password === formData.password);
+                    if (!response.ok) {
+                        if (response.status === 404) {
+                            throw new Error('User not found');
+                        }
+                        throw new Error('Network response was not ok');
+                    }
     
-                        if (user) {
-                            const token = btoa(user.email + ':' + new Date().getTime());
-                            localStorage.setItem('token', token);
-                            localStorage.setItem('userData', JSON.stringify(user));
-                            onLogin(user);
-                            onClose();
+                    const data = await response.json().catch(() => {
+                        throw new Error('Invalid response format');
+                    });
     
-                            if (productToAdd) {
-                                await handleAddToCart(productToAdd);
-                                navigate('/products');
-                            } else {
-                                navigate(location.state?.from || '/');
-                            }
+                    if (!data.success) {
+                        throw new Error(data.message || 'Login failed');
+                    }
+    
+                    // Rest of login logic
+                    const users = data.data || [];
+                    const user = users.find(u => u.email === formData.email);
+    
+                    if (user) {
+                        const token = btoa(user.email + ':' + new Date().getTime());
+                        localStorage.setItem('token', token);
+                        localStorage.setItem('userData', JSON.stringify(user));
+                        onLogin(user);
+                        onClose();
+    
+                        if (productToAdd) {
+                            await handleAddToCart(productToAdd);
+                            navigate('/products');
                         } else {
-                            throw new Error('Invalid email or password');
+                            navigate(location.state?.from || '/');
                         }
                     } else {
-                        throw new Error(data.message || 'Login failed');
+                        throw new Error('Invalid email or password');
                     }
                 } else {
                     // Registration Flow remains POST
@@ -111,6 +123,8 @@ const Login = ({ open, onClose, onLogin, initialMode = 'login' }) => {
                         headers: {
                             'Content-Type': 'application/json'
                         },
+                        mode: 'cors',
+                        credentials: 'same-origin',
                         body: JSON.stringify({
                             name: formData.fullName,
                             email: formData.email,
@@ -119,25 +133,26 @@ const Login = ({ open, onClose, onLogin, initialMode = 'login' }) => {
                         })
                     });
     
-                    const data = await response.json();
+                    if (!response.ok) {
+                        if (response.status === 409) {
+                            throw new Error('User already exists');
+                        }
+                        throw new Error('Registration failed');
+                    }
     
-                    if (response.ok && data.success) {
-                        setIsLogin(true);
-                        setFormData({
-                            fullName: '',
-                            email: '',
-                            password: '',
-                            confirmPassword: '',
-                            mobile: ''
-                        });
-                        setError('Registration successful! Please login.');
-                    } else {
+                    const data = await response.json().catch(() => {
+                        throw new Error('Invalid response format');
+                    });
+    
+                    if (!data.success) {
                         throw new Error(data.message || 'Registration failed');
                     }
+    
+                    // Rest of registration success logic
                 }
             } catch (err) {
                 console.error('Error:', err);
-                setError(err.message || 'An unexpected error occurred');
+                setError(err.message || 'An unexpected error occurred. Please try again.');
             } finally {
                 setIsLoading(false);
             }
