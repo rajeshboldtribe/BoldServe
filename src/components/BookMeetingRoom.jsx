@@ -17,50 +17,109 @@ import {
 import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
-import { format, setHours, setMinutes } from 'date-fns';
-import Login from '../pages/Login';
+import { format, addDays } from 'date-fns';
 import bookMeetingRoomImg from '../assets/damir-kopezhanov-VM1Voswbs0A-unsplash.jpg';
-// Add import for logo at the top
-import logo from '../assets/BoldTribe Logo-3.png'; // Make sure you have the logo in your assets folder
+import logo from '../assets/BoldTribe Logo-3.png';
 
-const BookMeetingRoom = ({ isLoggedIn }) => {
-    const [showLoginModal, setShowLoginModal] = useState(false);
+const BookMeetingRoom = () => {
     const [showBookingModal, setShowBookingModal] = useState(false);
     const [showTimeSlotModal, setShowTimeSlotModal] = useState(false);
     const [showRoomSelectionModal, setShowRoomSelectionModal] = useState(false);
     const [selectedRoom, setSelectedRoom] = useState(null);
-    const [bookingType, setBookingType] = useState('');  // Add this line
-    const [memberType, setMemberType] = useState('');    // Add this line
+    const [bookingType, setBookingType] = useState('');
+    const [memberType, setMemberType] = useState('');
     
+    const [selectedSeating, setSelectedSeating] = useState('');
+    const [showTimeSlotGridModal, setShowTimeSlotGridModal] = useState(false);
+    
+    const seatingOptions = [
+        { id: 'C1', name: '4 Seater', capacity: 4 },
+        { id: 'C2', name: '8 Seater', capacity: 8 }
+    ];
+
+    // Modify rooms data to include seating capacity
     const rooms = [
-        { id: '307', name: 'Room 307' },
-        { id: '630', name: 'Room 630' },
-        { id: '730', name: 'Room 730' },
-        { id: '420', name: 'Room 420' },
-        { id: '170', name: 'Room 170' }
+        { id: '307', name: 'Room 307', seating: 'C1' },
+        { id: '630', name: 'Room 630', seating: 'C2' },
+        { id: '730', name: 'Room 730', seating: 'C1' },
+        { id: '420', name: 'Room 420', seating: 'C2' },
+        { id: '170', name: 'Room 170', seating: 'C1' }
     ];
 
     // Mock data for booked rooms (in real app, this would come from backend)
+    // Update the bookedRooms state with sample bookings
     const [bookedRooms, setBookedRooms] = useState({
         // Today's bookings
-        [`${format(new Date(), 'yyyy-MM-dd')}-09:00`]: ['307'],
-        [`${format(new Date(), 'yyyy-MM-dd')}-10:00`]: ['420', '170'],
-        [`${format(new Date(), 'yyyy-MM-dd')}-11:00`]: ['730'],
-        [`${format(new Date(), 'yyyy-MM-dd')}-14:00`]: ['307'],
-        [`${format(new Date(), 'yyyy-MM-dd')}-15:30`]: ['630'],
+        [`${format(new Date(), 'yyyy-MM-dd')}-09:00`]: ['307', '420'],
+        [`${format(new Date(), 'yyyy-MM-dd')}-12:00`]: ['630', '170'],
+        [`${format(new Date(), 'yyyy-MM-dd')}-15:00`]: ['730'],
 
         // Tomorrow's bookings
-        [`${format(new Date(new Date().setDate(new Date().getDate() + 1)), 'yyyy-MM-dd')}-09:30`]: ['170'],
-        [`${format(new Date(new Date().setDate(new Date().getDate() + 1)), 'yyyy-MM-dd')}-11:00`]: ['307', '420'],
-        [`${format(new Date(new Date().setDate(new Date().getDate() + 1)), 'yyyy-MM-dd')}-13:30`]: ['730'],
-        [`${format(new Date(new Date().setDate(new Date().getDate() + 1)), 'yyyy-MM-dd')}-15:00`]: ['170'],
+        [`${format(addDays(new Date(), 1), 'yyyy-MM-dd')}-10:30`]: ['307'],
+        [`${format(addDays(new Date(), 1), 'yyyy-MM-dd')}-13:30`]: ['420', '630'],
+        [`${format(addDays(new Date(), 1), 'yyyy-MM-dd')}-16:30`]: ['170'],
 
         // Day after tomorrow's bookings
-        [`${format(new Date(new Date().setDate(new Date().getDate() + 2)), 'yyyy-MM-dd')}-10:00`]: ['420'],
-        [`${format(new Date(new Date().setDate(new Date().getDate() + 2)), 'yyyy-MM-dd')}-12:30`]: ['730', '170'],
-        [`${format(new Date(new Date().setDate(new Date().getDate() + 2)), 'yyyy-MM-dd')}-14:00`]: ['307'],
-        [`${format(new Date(new Date().setDate(new Date().getDate() + 2)), 'yyyy-MM-dd')}-16:00`]: ['420'],
+        [`${format(addDays(new Date(), 2), 'yyyy-MM-dd')}-09:00`]: ['730'],
+        [`${format(addDays(new Date(), 2), 'yyyy-MM-dd')}-12:00`]: ['307', '420'],
+        [`${format(addDays(new Date(), 2), 'yyyy-MM-dd')}-15:00`]: ['630'],
     });
+
+    // Add this function to calculate duration and price
+    const calculateDurationAndPrice = (start, end) => {
+        if (!start || !end) return { duration: 0, subtotal: 0, gst: 0, total: 0 };
+
+        const [startHour, startMinute] = start.split(':').map(Number);
+        const [endHour, endMinute] = end.split(':').map(Number);
+        
+        const duration = (endHour + endMinute/60) - (startHour + startMinute/60);
+        const basePrice = memberType === 'member' ? 400 : 500;
+        const subtotal = Math.ceil(duration * basePrice);
+        const gst = subtotal * 0.18;
+        
+        return {
+            duration,
+            subtotal,
+            gst,
+            total: subtotal + gst
+        };
+    };
+
+    // Update the time slot click handler to include price calculation
+    const handleTimeSlotClick = (roomId, startTime, endTime) => {
+        if (isRoomAvailable(roomId, selectedDate, startTime, endTime)) {
+            setSelectedRoom(roomId);
+            setSelectedTime(startTime);
+            setSelectedEndTime(endTime);
+            const priceDetails = calculateDurationAndPrice(startTime, endTime);
+            setCalculatedPrice(priceDetails);
+        }
+    };
+
+    // Remove this standalone Box component
+    // <Box
+    //     key={`${startTime}-${endTime}`}
+    //     onClick={() => {
+    //         if (isRoomAvailable(room.id, selectedDate, startTime)) {
+    //             handleTimeSlotClick(room.id, startTime, endTime);
+    //         }
+    //     }}
+    // >
+    //     <Typography>
+    //         {`${startTime}${parseInt(startTime) < 12 ? 'AM' : 'PM'}-${endTime}${parseInt(endTime) < 12 ? 'AM' : 'PM'}`}
+    //         {selectedTime === startTime && (
+    //             <Typography
+    //                 sx={{
+    //                     fontSize: '0.75rem',
+    //                     color: '#4CAF50',
+    //                     mt: 1
+    //                 }}
+    //             >
+    //                 ₹{calculatedPrice.total.toFixed(2)} (incl. GST)
+    //             </Typography>
+    //         )}
+    //     </Typography>
+    // </Box>
 
     const [selectedDate, setSelectedDate] = useState(null);
     const [selectedTime, setSelectedTime] = useState('');
@@ -119,13 +178,16 @@ const BookMeetingRoom = ({ isLoggedIn }) => {
     const TimeSlotContent = () => (
         <>
             <Typography variant="h6" gutterBottom>
-                Select Date and Time
+                Select Date and Seating Capacity
             </Typography>
             <LocalizationProvider dateAdapter={AdapterDateFns}>
                 <DatePicker
                     label="Select Date"
                     value={selectedDate}
-                    onChange={setSelectedDate}
+                    onChange={(date) => {
+                        setSelectedDate(date);
+                        setSelectedSeating('');
+                    }}
                     renderInput={(params) => <TextField {...params} fullWidth sx={{ mb: 2 }} />}
                     minDate={new Date()}
                     maxDate={getAvailableDates()[2]}
@@ -139,76 +201,23 @@ const BookMeetingRoom = ({ isLoggedIn }) => {
             
             {selectedDate && (
                 <FormControl fullWidth sx={{ mb: 2 }}>
-                    <InputLabel>Start Time</InputLabel>
+                    <InputLabel>Seating Capacity</InputLabel>
                     <Select
-                        value={selectedTime}
+                        value={selectedSeating}
                         onChange={(e) => {
-                            setSelectedTime(e.target.value);
-                            setSelectedEndTime('');
+                            setSelectedSeating(e.target.value);
+                            setShowTimeSlotGridModal(true);
                         }}
-                        label="Start Time"
+                        label="Seating Capacity"
                     >
-                        {timeSlots.map((slot) => (
-                            <MenuItem key={slot.value} value={slot.value}>
-                                {slot.display}
+                        {seatingOptions.map((option) => (
+                            <MenuItem key={option.id} value={option.id}>
+                                {option.name}
                             </MenuItem>
                         ))}
                     </Select>
                 </FormControl>
             )}
-
-            {selectedTime && (
-                <FormControl fullWidth sx={{ mb: 2 }}>
-                    <InputLabel>End Time</InputLabel>
-                    <Select
-                        value={selectedEndTime}
-                        onChange={(e) => {
-                            setSelectedEndTime(e.target.value);
-                            setCalculatedPrice(calculatePrice(selectedTime, e.target.value));
-                        }}
-                        label="End Time"
-                    >
-                        {getEndTimeSlots(selectedTime).map((slot) => (
-                            <MenuItem key={slot.value} value={slot.value}>
-                                {slot.display}
-                            </MenuItem>
-                        ))}
-                    </Select>
-                </FormControl>
-            )}
-
-            {selectedEndTime && (
-                <Box sx={{ mt: 2, color: 'primary.main' }}>
-                    <Typography variant="h6">
-                        Price Details ({Math.floor(calculatedPrice.duration)} hours {calculatedPrice.duration % 1 ? '30 mins' : ''})
-                    </Typography>
-                    <Typography variant="body1">
-                        Base Price: ₹{calculatedPrice.subtotal}/-
-                    </Typography>
-                    <Typography variant="body1">
-                        GST (18%): ₹{Math.ceil(calculatedPrice.gst)}/-
-                    </Typography>
-                    <Typography variant="h6" sx={{ mt: 1 }}>
-                        Total: ₹{Math.ceil(calculatedPrice.total)}/-
-                    </Typography>
-                </Box>
-            )}
-
-            <Button
-                fullWidth
-                variant="contained"
-                onClick={handleBookingSubmit}
-                disabled={!selectedDate || !selectedTime || !selectedEndTime}
-                sx={{
-                    mt: 2,
-                    background: 'linear-gradient(135deg, #7B68EE 0%, #6A5ACD 100%)',
-                    '&:hover': {
-                        background: 'linear-gradient(135deg, #6A5ACD 0%, #5B4ACE 100%)'
-                    }
-                }}
-            >
-                View Available Rooms
-            </Button>
         </>
     );
 
@@ -231,17 +240,15 @@ const BookMeetingRoom = ({ isLoggedIn }) => {
         }));
     };
 
-    // Update handleFinalBooking to include the new booking
+    // Update handleFinalBooking to use static data
     const handleFinalBooking = () => {
         if (selectedDate && selectedTime && selectedEndTime && selectedRoom) {
             // Add the new booking
             addNewBooking(selectedDate, selectedTime, selectedRoom);
 
             const formattedDate = format(selectedDate, "MMM dd, yyyy");
-            const userData = JSON.parse(localStorage.getItem('userData') || '{}');
-            const userName = userData.fullName || 'User';
             const message = encodeURIComponent(
-                `Hi, I am ${userName}. I want to book the meeting room ${selectedRoom} as a ${memberType} from ${formattedDate} ${selectedTime} to ${selectedEndTime}. Price: INR ${Math.ceil(calculatedPrice.total)}/- (Including GST)`
+                `Hi, I want to book the meeting room ${selectedRoom} as a ${memberType} from ${formattedDate} ${selectedTime} to ${selectedEndTime}. Price: INR ${Math.ceil(calculatedPrice.total)}/- (Including GST)`
             );
             window.location.href = `https://wa.me/+917684836139?text=${message}`;
         }
@@ -255,11 +262,7 @@ const BookMeetingRoom = ({ isLoggedIn }) => {
     };
 
     const handleBookNowClick = () => {
-        if (!isLoggedIn) {
-            setShowLoginModal(true);
-        } else {
-            setShowBookingModal(true);
-        }
+        setShowBookingModal(true);
     };
 
     const handleBookingSubmit = () => {
@@ -284,11 +287,11 @@ const BookMeetingRoom = ({ isLoggedIn }) => {
         <>
             <Box
                 sx={{
-                    minHeight: '100vh',  // Changed from 90vh to 100vh
+                    minHeight: '100vh',
                     position: 'relative',
                     overflow: 'hidden',
                     display: 'flex',
-                    flexDirection: 'column',  // Add this to stack items vertically
+                    flexDirection: 'column',
                     alignItems: 'center',
                     justifyContent: 'center',
                     my: 8,
@@ -583,57 +586,32 @@ const BookMeetingRoom = ({ isLoggedIn }) => {
                 
                         {selectedDate && (
                             <FormControl fullWidth sx={{ mb: 2 }}>
-                                <InputLabel>Start Time</InputLabel>
+                                <InputLabel>Select Seats</InputLabel>
                                 <Select
-                                    value={selectedTime}
+                                    value={selectedSeating}
                                     onChange={(e) => {
-                                        setSelectedTime(e.target.value);
-                                        setSelectedEndTime('');
+                                        setSelectedSeating(e.target.value);
+                                        setShowRoomSelectionModal(true);
+                                        setShowTimeSlotModal(false);
                                     }}
-                                    label="Start Time"
+                                    label="Select Seats"
                                 >
-                                    {timeSlots.map((slot) => (
-                                        <MenuItem key={slot.value} value={slot.value}>
-                                            {slot.display}
-                                        </MenuItem>
-                                    ))}
-                                </Select>
-                            </FormControl>
-                        )}
-                
-                        {selectedTime && (
-                            <FormControl fullWidth sx={{ mb: 2 }}>
-                                <InputLabel>End Time</InputLabel>
-                                <Select
-                                    value={selectedEndTime}
-                                    onChange={(e) => {
-                                        setSelectedEndTime(e.target.value);
-                                        setCalculatedPrice(calculatePrice(selectedTime, e.target.value));
-                                    }}
-                                    label="End Time"
-                                >
-                                    {getEndTimeSlots(selectedTime).map((slot) => (
-                                        <MenuItem key={slot.value} value={slot.value}>
-                                            {slot.display}
+                                    {seatingOptions.map((option) => (
+                                        <MenuItem key={option.id} value={option.id}>
+                                            {option.name}
                                         </MenuItem>
                                     ))}
                                 </Select>
                             </FormControl>
                         )}
 
-                        {selectedEndTime && (
-                            <Typography variant="h6" sx={{ mt: 2, color: 'primary.main' }}>
-                                Estimated Price: ₹{calculatedPrice.subtotal}/- (GST: ₹{Math.ceil(calculatedPrice.gst)}/-)<br />
-                                Total: ₹{Math.ceil(calculatedPrice.total)}/- <br />
-                                Duration: {Math.floor(calculatedPrice.duration)} hours {calculatedPrice.duration % 1 ? '30 mins' : ''}
-                            </Typography>
-                        )}
+                        {/* Remove the Start Time dropdown section */}
 
                         <Button
                             fullWidth
                             variant="contained"
                             onClick={handleBookingSubmit}
-                            disabled={!selectedDate || !selectedTime}
+                            disabled={!selectedDate || !selectedSeating}
                             sx={{
                                 background: 'linear-gradient(135deg, #7B68EE 0%, #6A5ACD 100%)',
                                 '&:hover': {
@@ -641,7 +619,7 @@ const BookMeetingRoom = ({ isLoggedIn }) => {
                                 }
                             }}
                         >
-                            Confirm Booking
+                            Next
                         </Button>
                     </Box>
                 </Fade>
@@ -659,62 +637,217 @@ const BookMeetingRoom = ({ isLoggedIn }) => {
                         top: '50%',
                         left: '50%',
                         transform: 'translate(-50%, -50%)',
-                        width: 600,
+                        width: '80%',
+                        maxWidth: 900,
                         bgcolor: 'background.paper',
                         borderRadius: 2,
                         boxShadow: 24,
                         p: 4,
-                        background: 'linear-gradient(135deg, #ffffff 0%, #f0f0ff 100%)'
+                        background: 'linear-gradient(135deg, #ffffff 0%, #f0f0ff 100%)',
+                        maxHeight: '90vh',
+                        overflow: 'auto'
                     }}>
                         <Typography variant="h6" gutterBottom>
                             Select Meeting Room
                         </Typography>
-                        <Typography variant="body2" sx={{ mb: 3 }}>
-                            Selected Date: {selectedDate ? format(selectedDate, 'dd MMM yyyy') : ''}<br />
-                            Time Slot: {selectedTime}
-                        </Typography>
-                        
+
+                        {/* Date Selection Tabs */}
                         <Box sx={{ 
-                            display: 'grid', 
-                            gridTemplateColumns: 'repeat(3, 1fr)',
-                            gap: 2,
-                            mb: 3
+                            display: 'flex', 
+                            gap: 2, 
+                            mb: 4,
+                            justifyContent: 'center'
                         }}>
-                            {rooms.map((room) => (
+                            {getAvailableDates().map((date) => (
                                 <Button
-                                    key={room.id}
-                                    variant="contained"
-                                    onClick={() => {
-                                        if (!isRoomAvailable(room.id, selectedDate, selectedTime)) {
-                                            alert(`Room ${room.name} is already booked for this time slot. Please select another room.`);
-                                            return;
-                                        }
-                                        setSelectedRoom(room.id);
-                                    }}
+                                    key={format(date, 'yyyy-MM-dd')}
+                                    variant={selectedDate && format(date, 'yyyy-MM-dd') === format(selectedDate, 'yyyy-MM-dd') 
+                                        ? "contained" 
+                                        : "outlined"
+                                    }
+                                    onClick={() => setSelectedDate(date)}
                                     sx={{
-                                        bgcolor: isRoomAvailable(room.id, selectedDate, selectedTime) 
-                                            ? '#4CAF50'  // Green color for available rooms
-                                            : '#FF0000', // Red color for booked rooms
-                                        '&:hover': {
-                                            bgcolor: isRoomAvailable(room.id, selectedDate, selectedTime)
-                                                ? '#45a049'  // Darker green on hover
-                                                : '#cc0000'  // Darker red on hover
-                                        },
-                                        color: 'white',
-                                        p: 2,
-                                        fontWeight: 'bold'  // Added bold font weight for all room numbers
+                                        minWidth: 120,
+                                        background: selectedDate && format(date, 'yyyy-MM-dd') === format(selectedDate, 'yyyy-MM-dd')
+                                            ? 'linear-gradient(135deg, #7B68EE 0%, #6A5ACD 100%)'
+                                            : 'transparent'
                                     }}
-                                    disabled={!isRoomAvailable(room.id, selectedDate, selectedTime)}
                                 >
-                                    {room.name}
+                                    {format(date, 'dd MMM yyyy')}
                                 </Button>
                             ))}
                         </Box>
 
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 2 }}>
+                        {/* Room Cards Grid */}
+                        <Box sx={{ 
+                            display: 'grid',
+                            gridTemplateColumns: 'repeat(3, 1fr)',
+                            gap: 6,
+                            mb: 3,
+                            px: 4,
+                            justifyContent: 'space-between'
+                        }}>
+                            {rooms
+                                .filter(room => room.seating === selectedSeating)
+                                .map((room) => (
+                                    <Card
+                                        key={room.id}
+                                        onClick={() => {
+                                            if (isRoomAvailable(room.id, selectedDate, selectedTime)) {
+                                                setSelectedRoom(room.id);
+                                            }
+                                        }}
+                                        sx={{
+                                            cursor: 'pointer',
+                                            transform: selectedRoom === room.id ? 'scale(1.05)' : 'scale(1)',
+                                            transition: 'all 0.3s ease',
+                                            bgcolor: isRoomAvailable(room.id, selectedDate, selectedTime)
+                                                ? 'white'
+                                                : '#ffebee',
+                                            border: selectedRoom === room.id ? '2px solid #7B68EE' : 'none',
+                                            minWidth: '280px',
+                                            textAlign: 'center',
+                                            boxShadow: selectedRoom === room.id 
+                                                ? '0 8px 16px rgba(123, 104, 238, 0.2)'
+                                                : '0 4px 8px rgba(0, 0, 0, 0.1)',
+                                            '&:hover': {
+                                                transform: 'scale(1.05)',
+                                                boxShadow: '0 8px 16px rgba(123, 104, 238, 0.2)',
+                                            }
+                                        }}
+                                    >
+                                        <CardContent sx={{ p: 3 }}>
+                                            <Typography 
+                                                variant="h5" 
+                                                gutterBottom
+                                                sx={{
+                                                    fontWeight: 'bold',
+                                                    color: '#7B68EE',
+                                                    mb: 2
+                                                }}
+                                            >
+                                                Room {room.name}
+                                            </Typography>
+                                            <Typography 
+                                                color="textSecondary"
+                                                sx={{
+                                                    mb: 3,
+                                                    fontSize: '1.1rem'
+                                                }}
+                                            >
+                                                {seatingOptions.find(opt => opt.id === room.seating)?.name}
+                                            </Typography>
+                                            
+                                            {/* Time Slots Grid */}
+                                            <Box sx={{ 
+                                                display: 'grid',
+                                                gridTemplateColumns: 'repeat(3, 1fr)',
+                                                gap: 1,
+                                                mt: 2
+                                            }}>
+                                                {[2, 2.5, 3, 3.5, 4, 4.5, 5, 5.5, 6].map((hours) => {
+                                                    const startTime = '09:00';
+                                                    const [startHour, startMinute] = startTime.split(':').map(Number);
+                                                    const endHour = startHour + Math.floor(hours);
+                                                    const endMinute = startMinute + (hours % 1 ? 30 : 0);
+                                                    
+                                                    const formattedStartTime = `${startHour}:${startMinute.toString().padStart(2, '0')}`;
+                                                    const formattedEndTime = `${endHour}:${endMinute.toString().padStart(2, '0')}`;
+                                                    
+                                                    const isSelected = selectedRoom === room.id && 
+                                                                     selectedTime === formattedStartTime && 
+                                                                     selectedEndTime === formattedEndTime;
+                                                    
+                                                    const isAvailable = isRoomAvailable(room.id, selectedDate, formattedStartTime, formattedEndTime);
+                                                    
+                                                    return (
+                                                        <Box
+                                                            key={hours}
+                                                            onClick={() => {
+                                                                if (isAvailable) {
+                                                                    handleTimeSlotClick(room.id, formattedStartTime, formattedEndTime);
+                                                                }
+                                                            }}
+                                                            sx={{
+                                                                width: '100%',
+                                                                aspectRatio: '1',
+                                                                display: 'flex',
+                                                                flexDirection: 'column',
+                                                                alignItems: 'center',
+                                                                justifyContent: 'center',
+                                                                border: isSelected ? '2px solid #4CAF50' : '1px solid #4CAF50',
+                                                                borderRadius: '8px',
+                                                                cursor: isAvailable ? 'pointer' : 'not-allowed',
+                                                                bgcolor: isSelected 
+                                                                    ? 'rgba(76, 175, 80, 0.2)'
+                                                                    : isAvailable 
+                                                                        ? 'rgba(76, 175, 80, 0.05)'
+                                                                        : 'rgba(244, 67, 54, 0.1)',
+                                                                '&:hover': isAvailable ? {
+                                                                    bgcolor: 'rgba(76, 175, 80, 0.1)',
+                                                                    transform: 'scale(1.05)',
+                                                                } : {},
+                                                                transition: 'all 0.2s ease'
+                                                            }}
+                                                        >
+                                                            <Typography
+                                                                sx={{
+                                                                    fontSize: '0.85rem',
+                                                                    fontWeight: 'medium',
+                                                                    color: isAvailable ? '#4CAF50' : '#f44336',
+                                                                    textAlign: 'center'
+                                                                }}
+                                                            >
+                                                                {`${formattedStartTime}${startHour < 12 ? 'AM' : 'PM'}-${formattedEndTime}${endHour < 12 ? 'AM' : 'PM'}`}
+                                                            </Typography>
+                                                            {isSelected && (
+                                                                <Typography
+                                                                    sx={{
+                                                                        fontSize: '0.75rem',
+                                                                        color: '#4CAF50',
+                                                                        mt: 1
+                                                                    }}
+                                                                >
+                                                                    ₹{calculatedPrice.total.toFixed(2)}
+                                                                </Typography>
+                                                            )}
+                                                        </Box>
+                                                    );
+                                                })}
+                                            </Box>
+                                            
+                                            <Typography 
+                                                variant="body2" 
+                                                sx={{ 
+                                                    color: isRoomAvailable(room.id, selectedDate, selectedTime)
+                                                        ? 'success.main'
+                                                        : 'error.main',
+                                                    mt: 3,
+                                                    fontWeight: 'bold',
+                                                    fontSize: '1rem',
+                                                    padding: '8px',
+                                                    borderRadius: '4px',
+                                                    backgroundColor: isRoomAvailable(room.id, selectedDate, selectedTime)
+                                                        ? 'rgba(76, 175, 80, 0.1)'
+                                                        : 'rgba(244, 67, 54, 0.1)'
+                                                }}
+                                            >
+                                                {isRoomAvailable(room.id, selectedDate, selectedTime)
+                                                    ? 'Available'
+                                                    : 'Booked'}
+                                            </Typography>
+                                        </CardContent>
+                                    </Card>
+                            ))}
+                        </Box>
+
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 3 }}>
                             <Button
                                 variant="outlined"
-                                onClick={() => setShowRoomSelectionModal(false)}
+                                onClick={() => {
+                                    setShowRoomSelectionModal(false);
+                                    setShowTimeSlotModal(true);
+                                }}
                             >
                                 Back
                             </Button>
@@ -735,17 +868,65 @@ const BookMeetingRoom = ({ isLoggedIn }) => {
                     </Box>
                 </Fade>
             </Modal>
-
-            <Login
-                open={showLoginModal}
-                onClose={() => setShowLoginModal(false)}
-                onLogin={() => {
-                    setShowLoginModal(false);
-                    setShowBookingModal(true);
-                }}
-            />
         </>
     );
 };
 
 export default BookMeetingRoom;
+
+// Add this before the return statement
+    const TimeSlotGrid = () => {
+        const availableRooms = rooms.filter(room => room.seating === selectedSeating);
+        
+        const timeSlotStatus = (time) => {
+            const timeKey = `${format(selectedDate, 'yyyy-MM-dd')}-${time}`;
+            const bookedRoomsForSlot = bookedRooms[timeKey] || [];
+            const isAvailable = availableRooms.some(room => !bookedRoomsForSlot.includes(room.id));
+            return isAvailable;
+        };
+
+        return (
+            <Box sx={{ width: '100%' }}>
+                <Typography variant="h6" gutterBottom>
+                    Available Time Slots
+                </Typography>
+                <Typography variant="body2" sx={{ mb: 3 }}>
+                    Date: {format(selectedDate, 'dd MMM yyyy')}
+                    <br />
+                    Seating: {seatingOptions.find(opt => opt.id === selectedSeating)?.name}
+                </Typography>
+                
+                <Box sx={{ 
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(4, 1fr)',
+                    gap: 2,
+                    mb: 3
+                }}>
+                    {timeSlots.map((slot) => (
+                        <Button
+                            key={slot.value}
+                            variant="contained"
+                            onClick={() => {
+                                if (timeSlotStatus(slot.value)) {
+                                    setSelectedTime(slot.value);
+                                    setShowTimeSlotGridModal(false);
+                                } else {
+                                    alert('This time slot is not available. Please select another.');
+                                }
+                            }}
+                            sx={{
+                                bgcolor: timeSlotStatus(slot.value) ? '#4CAF50' : '#FF0000',
+                                '&:hover': {
+                                    bgcolor: timeSlotStatus(slot.value) ? '#45a049' : '#cc0000'
+                                },
+                                color: 'white',
+                                p: 2
+                            }}
+                        >
+                            {slot.display}
+                        </Button>
+                    ))}
+                </Box>
+            </Box>
+        );
+    };
